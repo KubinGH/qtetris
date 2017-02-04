@@ -8,14 +8,14 @@ from gamecls import TetriminoOverlap
 from game import Game
 from extdraw import draw_rect
 
+from genedata import agg_height, complete_lines, count_holes, bumpiness
+
 BOARD_SIZE = (10, 20)
 WINDOW_SIZE = (500, 660)
 BLOCK_SIZE = 30
 
 BOARD_SIZE_PX = (300, 600)
 BOARD_POSFIX = (30, 30)
-#center
-#board_posfix = tuple((WINDOW_SIZE[i] - board_size_px[i]) / 2 for i in range(2))
 
 SCORE_POS = (360, 90)
 NTBOX_POS = (360, 220)
@@ -30,6 +30,7 @@ else:
     GSECS_DOWN = 0.1
     MSECS = 0.1
 
+DBGSECS = 0.1
 
 
 class App(Game):
@@ -53,7 +54,8 @@ class App(Game):
         qclocks = {"left":      qclock.Clock(),
                    "right":     qclock.Clock(),
                    "gravity":   qclock.Clock(),
-                   "draw":      qclock.Clock()}
+                   "draw":      qclock.Clock(),
+                   "dbg":       qclock.Clock()}
 
         moving = {"right": False,
                   "left": False,
@@ -65,7 +67,7 @@ class App(Game):
         
         clock = pygame.time.Clock()
         done = False
-        while not done:            
+        while not done:
             ## Events ##
             quitting = self.check_for_quit()
             if quitting: return
@@ -142,6 +144,9 @@ class App(Game):
             self.draw_full()            
 
             ## End ##
+
+            if qclocks["dbg"].passed(DBGSECS):
+                qclocks["dbg"].tick()
             
             pygame.display.flip()
             clock.tick(FPS)

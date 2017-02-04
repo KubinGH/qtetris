@@ -1,5 +1,8 @@
 import random
 
+def percent_chance(percent):
+    return random.randint(0, 100) <= percent
+
 class DNA:
     def __init__(self, data):
         self.data = list(data)
@@ -17,6 +20,12 @@ class DNA:
         new_data = list(random.choice((gene1, gene2))
                         for gene1, gene2 in zip(self, other))
         return DNA(new_data)
+
+    def mutated(self):
+        raise NotImplementedError
+    
+    def mutate(self):
+        self.data = self.mutated().data
 
 #arithmetical average
 def average(*args):
@@ -43,11 +52,13 @@ class NumDNA(DNA):
                         for gene1, gene2 in zip(self, other))
         return NumDNA(new_data)
 
+NOFITNESS = object()
+
 class Specimen:
     def __init__(self, dna, fit_function):
         self.dna = dna
         self.fit_function = fit_function
-
+        self._fitness = NOFITNESS
     def __repr__(self):
         return "{0.__class__.__name__}({0.dna}, {0.fit_function})".format(self)
 
@@ -61,9 +72,20 @@ class Specimen:
     def crossover(self, other):
         return Specimen(self.dna.crossover(other.dna), self.fit_function)
 
-    def get_fitness(self):
-        return self.fit_function(self.dna)
+    def mutated(self):
+        return Specimen(self.dna.mutated(), self.fit_function)
 
+    def mutate(self):
+        self.dna = self.dna.mutated()
+
+    @property
+    def fitness(self):
+        return self.calculate_fitness()
+
+    def calculate_fitness(self):
+        if self._fitness is NOFITNESS:
+            self._fitness = self.fit_function()
+        return self._fitness
 
 if __name__ == "__main__":
     d_one = DNA("1234")

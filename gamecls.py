@@ -204,11 +204,22 @@ class Board:
     def __iter__(self):
         return iter(self.data)
 
+    def __len__(self):
+        return len(self.data)
+    
     def __getitem__(self, index):
         return self.data[index]
 
     def __setitem__(self, index, obj):
         self.data[index] = obj
+
+    @property
+    def rows(self):
+        return self.data
+
+    @property
+    def columns(self):
+        return [list(c) for c in zip(*self.data)]
 
     def on_board(self, tetrimino, topleft):
         return tetrimino_to_board(tetrimino, self, topleft)
