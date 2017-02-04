@@ -8,7 +8,7 @@ from gamecls import TetriminoOverlap
 from game import Game
 from extdraw import draw_rect
 
-from genedata import agg_height, complete_lines, count_holes, bumpiness
+from qgenes import agg_height, complete_lines, count_holes, bumpiness
 
 BOARD_SIZE = (10, 20)
 WINDOW_SIZE = (500, 660)
