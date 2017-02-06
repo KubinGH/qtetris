@@ -22,22 +22,33 @@ NTBOX_POS = (360, 220)
 
 NODELAY = False
 
-if NODELAY:
-    FPS = GSECS = GSECS_DOWN = MSECS = 0
-else:
-    FPS = 120
-    GSECS = 0.3
-    GSECS_DOWN = 0.1
-    MSECS = 0.1
+def set_nodelay(boolean):
+    global NODELAY, FPS, GSECS, GSECS_DOWN, MSECS
+    NODELAY = boolean
+    if NODELAY:
+        FPS = GSECS = GSECS_DOWN = MSECS = 0
+    else:
+        FPS = 120
+        GSECS = 0.3
+        GSECS_DOWN = 0.1
+        MSECS = 0.1
+    
+def toggle_delay(forced_value=None):
+    global NODELAY
+    NODELAY = not NODELAY
+    set_nodelay(NODELAY)
 
 DBGSECS = 0.1
 
+set_nodelay(NODELAY)
+
 
 class App(Game):
-    def __init__(self, *, window_size=WINDOW_SIZE, board_size=BOARD_SIZE):
+    def __init__(self, screen, *, board_size=BOARD_SIZE):
         super().__init__(*board_size)
-        self.window_size = window_size
-        self.screen = None
+        self.window_size = screen.get_size()
+        self.screen = screen
+        self.resetting = False
         try:
             self.font = pygame.font.SysFont("Corbel", 50)
             self.msgfont = pygame.font.SysFont("Monospace", 25, bold=True)
@@ -46,9 +57,8 @@ class App(Game):
         self.scoreheader = self.font.render("Score", True, Color.WHITE)
         self.gameovertext = self.msgfont.render("Game Over!", True, Color.RED)
         self.r_next_tetrimino = self.nt_box = None
-
+        
     def run(self):
-        self.screen = pygame.display.set_mode(self.window_size, pygame.SRCALPHA)
         self.board_surface = pygame.Surface(BOARD_SIZE_PX)
 
         qclocks = {"left":      qclock.Clock(),
@@ -76,9 +86,20 @@ class App(Game):
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_UP:
                         do_rotate = True
-
+                        
+                    elif event.key == pygame.K_SPACE:
+                        self.swap_falling()
+                    
                     elif event.key == pygame.K_p:
                         pausing = True
+                    
+                    elif event.key == pygame.K_r:
+                        self.resetting = True
+                        return
+                    
+                    elif event.key == pygame.K_n:
+                        toggle_delay()
+                    
 
             while pausing:
                 quitting = self.check_for_quit()
@@ -150,15 +171,17 @@ class App(Game):
             
             pygame.display.flip()
             clock.tick(FPS)
-            
-        pygame.quit()
 
     def check_for_quit(self):
+        keys = pygame.key.get_pressed()
         try:
             for event in pygame.event.get(pygame.QUIT):
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     return True
+            if keys[pygame.K_r]:
+                self.resetting = True
+                return True
             return False
         except pygame.error:
             return True
@@ -187,8 +210,8 @@ class App(Game):
                   pygame.Rect(x, y, BLOCK_SIZE, BLOCK_SIZE), 2)
 
     def draw_ghost(self):
-        if self.last_fpos is not None and self.last_fpos != "hit_already" and \
-                                          self.ftetrimino is not None:
+        t = (None, "hit_already")
+        if self.last_fpos not in t and self.ftetrimino is not None:
             block = self.ftetrimino.block
             for col, row in self.ftetrimino.blocks_on(self.last_fpos):
                 x, y = col * BLOCK_SIZE, row * BLOCK_SIZE
@@ -264,5 +287,11 @@ class App(Game):
 
 if __name__ == "__main__":
     pygame.init()
-    app = App()
-    app.run()
+    screen = pygame.display.set_mode(WINDOW_SIZE, pygame.SRCALPHA)
+    while True:
+        screen.fill(Color.BLACK)
+        app = App(screen)
+        app.run()
+        if not app.resetting:
+            break
+    pygame.quit()

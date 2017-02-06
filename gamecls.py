@@ -42,7 +42,11 @@ def tetrimino_to_board(tetrimino, o_board, topleft, docopy=True):
 
     return board
 
-def permutation_random_generator(sequence):
+_FORCEDSEQ = []
+
+def permutation_random_generator(sequence, _forced=_FORCEDSEQ):
+    for item in _forced:
+        yield item
     while True:
         cseq = [item for item in sequence]
         random.shuffle(cseq)
@@ -136,13 +140,12 @@ class Tetrimino:
         left, top = topleft
         for col, row in self.blocks_on():
             bcol, brow = col + left, row + top
-            if self.shape[row][col]:
-                if brow < 0 or bcol < 0:
-                    return False
-                elif bcol >= board.width or brow >= board.height:
-                    return False
-                elif not board[brow][bcol].empty:
-                    return False
+            if brow < 0 or bcol < 0:
+                return False
+            elif bcol >= board.width or brow >= board.height:
+                return False
+            elif not board[brow][bcol].empty:
+                return False
         return True
                 
     def rotated(self, times=1):
@@ -225,5 +228,6 @@ class Board:
         return tetrimino_to_board(tetrimino, self, topleft)
 
     def place_tetrimino(self, tetrimino, topleft):
-        tetrimino_to_board(tetrimino, self, topleft, docopy=False)
+        result = tetrimino_to_board(tetrimino, self, topleft)
+        self.data = result.data
         

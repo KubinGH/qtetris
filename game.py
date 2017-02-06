@@ -11,17 +11,26 @@ class Game:
         self.board = Board(bwidth, bheight)
         self.fboard = self.board.copy()
         self.reset_falling()
-        self.last_fpos = None
+        self.last_fpos = self.last_fpos_rot = None
         self.last_fpos_setpoint = self.fpos
         self.next_tetrimino = Tetrimino.random()
+        self.swapped_f = False
         self.score = 0
 
     def reset_falling(self):
         self.ftetrimino = self.fpos = None
         
-    def random_valid_tetrimino(self):
-        tetrimino = self.next_tetrimino
-        self.next_tetrimino = Tetrimino.random()
+    def swap_falling(self):
+        if self.swapped_f:
+            return None
+        self.swapped_f = True
+        f, n = self.ftetrimino, self.next_tetrimino
+        self.ftetrimino, self.next_tetrimino = n, f
+        self.fpos = self.random_valid_fpos(self.ftetrimino)
+        self.last_fpos = self.last_fpos_rot = self.last_fpos_setpoint = None
+
+
+    def random_valid_fpos(self, tetrimino):
         row = -(empty_toprows[tetrimino.name])
         colfix_lo = -(empty_leftcols[tetrimino.name])
         colfix_hi = -(tetrimino.width) + empty_rightcols[tetrimino.name]
@@ -30,7 +39,16 @@ class Game:
         for col in possible_cols:
             fits = tetrimino.fits_on(self.board, (col, row))
             if fits:
-                return tetrimino, (col, row)
+                return (col, row)
+        return None        
+    
+    def random_valid_tetrimino(self):
+        tetrimino = self.next_tetrimino
+        self.next_tetrimino = Tetrimino.random()
+        for _ in range(2): #better safe than sorry
+            rand_fpos = self.random_valid_fpos(tetrimino)
+            if rand_fpos is not None:
+                return tetrimino, rand_fpos
         return None
 
     def process_gravity(self):
@@ -52,6 +70,7 @@ class Game:
             self.board.place_tetrimino(self.ftetrimino, self.fpos)
             self.fboard = self.board.copy()
             self.reset_falling()
+            self.swapped_f = False
 
     def get_last_fpos(self):
         fits_on = lambda pos: self.ftetrimino.fits_on(self.board, pos)
@@ -65,8 +84,10 @@ class Game:
             return (next_fpos[0], next_fpos[1] - 1)
 
     def set_last_fpos(self):
-        if self.fpos != self.last_fpos_setpoint:
+        if self.fpos != self.last_fpos_setpoint or  \
+               self.ftetrimino.rotation != self.last_fpos_rot:
             self.last_fpos_setpoint = self.fpos
+            self.last_fpos_rot = self.ftetrimino.rotation
             self.last_fpos = self.get_last_fpos()
 
     def check_for_full(self):
@@ -91,8 +112,6 @@ class Game:
         rotated = self.ftetrimino.rotated()
         if rotated.fits_on(self.board, self.fpos):
             self.ftetrimino = rotated
-        else:
-            pass
     
     def f_moveright(self):
         next_pos = (self.fpos[0] + 1, self.fpos[1])
