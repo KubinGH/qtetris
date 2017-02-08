@@ -6,6 +6,8 @@ BWIDTH, BHEIGHT = (10, 20)
 
 SCORE_PER_LINES = [0, 40, 100, 300, 1200]
 
+RANDOM_POS_TRIES = 4
+
 class Game:
     def __init__(self, bwidth=BWIDTH, bheight=BHEIGHT):
         self.board = Board(bwidth, bheight)
@@ -45,7 +47,7 @@ class Game:
     def random_valid_tetrimino(self):
         tetrimino = self.next_tetrimino
         self.next_tetrimino = Tetrimino.random()
-        for _ in range(2): #better safe than sorry
+        for _ in range(4):
             rand_fpos = self.random_valid_fpos(tetrimino)
             if rand_fpos is not None:
                 return tetrimino, rand_fpos

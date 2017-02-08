@@ -183,8 +183,10 @@ class App(Game):
                 self.resetting = True
                 return True
             return False
-        except pygame.error:
+        except:
             return True
+        else:
+            return False
     
     def game_over(self):
         midx = (WINDOW_SIZE[0] - self.gameovertext.get_width()) / 2
