@@ -1,12 +1,14 @@
 import random
-from gamecls import Block, Tetrimino, TetriminoOverlap, Board
-from shapedata import empty_toprows, empty_leftcols, empty_rightcols
+from gamecls import Block, Tetrimino, TetriminoOverlap, Board, fall_pos
+
 
 BWIDTH, BHEIGHT = (10, 20)
 
 SCORE_PER_LINES = [0, 40, 100, 300, 1200]
 
-RANDOM_POS_TRIES = 4
+RANDOM_POS_TRIES = 1
+
+class GameOver(Exception): pass
 
 class Game:
     def __init__(self, bwidth=BWIDTH, bheight=BHEIGHT):
@@ -27,27 +29,26 @@ class Game:
             return None
         self.swapped_f = True
         f, n = self.ftetrimino, self.next_tetrimino
+        f = Tetrimino(f.name)
         self.ftetrimino, self.next_tetrimino = n, f
         self.fpos = self.random_valid_fpos(self.ftetrimino)
         self.last_fpos = self.last_fpos_rot = self.last_fpos_setpoint = None
 
 
     def random_valid_fpos(self, tetrimino):
-        row = -(empty_toprows[tetrimino.name])
-        colfix_lo = -(empty_leftcols[tetrimino.name])
-        colfix_hi = -(tetrimino.width) + empty_rightcols[tetrimino.name]
-        possible_cols = list(range(colfix_lo, BWIDTH + colfix_hi + 1))
+        row = tetrimino.rowfix_top
+        possible_cols = tetrimino.possible_cols(board_width=BWIDTH)
         random.shuffle(possible_cols)
         for col in possible_cols:
             fits = tetrimino.fits_on(self.board, (col, row))
             if fits:
                 return (col, row)
-        return None        
+        return None
     
     def random_valid_tetrimino(self):
         tetrimino = self.next_tetrimino
         self.next_tetrimino = Tetrimino.random()
-        for _ in range(4):
+        for _ in range(RANDOM_POS_TRIES):
             rand_fpos = self.random_valid_fpos(tetrimino)
             if rand_fpos is not None:
                 return tetrimino, rand_fpos
@@ -69,7 +70,10 @@ class Game:
     def gravity_full(self):
         gravity_status = self.process_gravity()
         if gravity_status == "hit":
-            self.board.place_tetrimino(self.ftetrimino, self.fpos)
+            try:
+                self.board.place_tetrimino(self.ftetrimino, self.fpos)
+            except TetriminoOverlap:
+                raise GameOver
             self.fboard = self.board.copy()
             self.reset_falling()
             self.swapped_f = False
@@ -84,6 +88,10 @@ class Game:
                 next_fpos = (next_fpos[0], next_fpos[1] + 1)
                 free = fits_on(next_fpos)
             return (next_fpos[0], next_fpos[1] - 1)
+
+    def get_last_fpos(self):
+        r = fall_pos(self.ftetrimino, self.fpos, self.board)
+        return "hit_already" if r[1] == self.fpos[1] else r
 
     def set_last_fpos(self):
         if self.fpos != self.last_fpos_setpoint or  \

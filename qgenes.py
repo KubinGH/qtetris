@@ -3,6 +3,7 @@ import random
 from genetics import NumDNA, Specimen, percent_chance, \
                      NOFITNESS, weighted_average
 
+from qutils import get_possible_outcomes
 
 def _top_nonempty(column):
     result = 0
@@ -59,7 +60,7 @@ def get_parameters(board):
             bumpiness(board)]
 
 def fitness_wp(parameters, weights):
-    return sum(a * b for param, weight in zip(parameters, weights))
+    return sum(param * weight for param, weight in zip(parameters, weights))
 
 def fitness(board, weights):
     return fitness_wp(get_parameters(board), weights)

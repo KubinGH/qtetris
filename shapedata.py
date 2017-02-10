@@ -46,37 +46,38 @@ shape_colors = {
 def _allelem(iterable, elem):
     return all(e == elem for e in iterable)
 
-def count_empty_toprows(name):
+def count_empty_toprows(tetrimino):
     counter = 0
-    for row in shapes[name]:
+    for row in tetrimino.shape:
         if _allelem(row, 0):
             counter += 1
         else:
             break
     return counter
 
-def count_empty_leftcols(name):
+def count_empty_botrows(tetrimino):
     counter = 0
-    for col in zip(*shapes[name]):
+    for row in reversed(tetrimino.shape):
+        if _allelem(row, 0):
+            counter += 1
+        else:
+            break
+    return counter
+
+def count_empty_leftcols(tetrimino):
+    counter = 0
+    for col in zip(*tetrimino.shape):
         if _allelem(col, 0):
             counter += 1
         else:
             break
     return counter
         
-def count_empty_rightcols(name):
+def count_empty_rightcols(tetrimino):
     counter = 0
-    for col in reversed(list(zip(*shapes[name]))):
+    for col in reversed(list(zip(*tetrimino.shape))):
         if _allelem(col, 0):
             counter += 1
         else:
             break
     return counter
-
-empty_toprows, empty_leftcols, empty_rightcols = {}, {}, {}
-
-for name in shape_names:
-    empty_toprows[name] =   count_empty_toprows(name)
-    empty_leftcols[name] =  count_empty_leftcols(name)
-    empty_rightcols[name] = count_empty_rightcols(name)
-

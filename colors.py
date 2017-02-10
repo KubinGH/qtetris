@@ -12,26 +12,31 @@ class Color:
 
     YELLOW =    (255, 255,   0)
     CYAN =      (  0, 255, 255)
-    PURPLE =    (255,   0, 255)
+    PURPLEW =    (255,   0, 255)
 
     MAGENTA =   (255,   0, 144)
+    PINK =      (255,  51,  80)
+    PURPLE =    (180,   0, 180)
 
     LBLUE =     (100, 100, 255)
     DBLUE =     (  0,   0, 125)
+    EBLUE =     (  0,   0, 100)
 
     COLORS = ["BLACK", "WHITE",
               "LGRAY", "GRAY", "DGRAY",
               "RED", "GREEN", "BLUE",
-              "YELLOW", "CYAN", "PURPLE",
-              "MAGENTA",
-              "LBLUE", "DBLUE"]
+              "YELLOW", "CYAN", "PURPLEW",
+              "MAGENTA", "PINK", "PURPLE",
+              "LBLUE", "DBLUE", "EBLUE"]
     
     @classmethod
     def with_alpha(self, alpha):
         return _ColorWithAlpha(alpha)
 
     def by_name(self, name):
-        return getattr(self, name.upper())
+        name_upper = name.upper()
+        assert name_upper in COLORS
+        return getattr(self, name_upper)
 
 _DUMMY = Color()
 

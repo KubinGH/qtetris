@@ -2,7 +2,12 @@ import random
 import itertools
 
 from colors import Color
-from shapedata import shape_names, shapes, shape_colors
+from shapedata import shape_names, shapes, shape_colors, \
+                      count_empty_toprows, \
+                      count_empty_botrows, \
+                      count_empty_leftcols, \
+                      count_empty_rightcols
+                    
 
 BSIZE = (10, 20)
 BWIDTH, BHEIGHT = BSIZE
@@ -43,15 +48,17 @@ def tetrimino_to_board(tetrimino, o_board, topleft, docopy=True):
     return board
 
 _FORCEDSEQ = []
+_DISABLED = []
 
-def permutation_random_generator(sequence, _forced=_FORCEDSEQ):
+def permutation_random_generator(sequence, _forced=_FORCEDSEQ, _disabled=_DISABLED):
     for item in _forced:
         yield item
     while True:
         cseq = [item for item in sequence]
         random.shuffle(cseq)
         for item in cseq:
-            yield item
+            if item not in _disabled:
+                yield item
 
 random_tetrimino_letter = permutation_random_generator(shape_names)
 
@@ -101,6 +108,10 @@ class Tetrimino:
     @property
     def height(self):
         return len(self.shape)
+
+    @property
+    def size(self):
+        return (self.width, self.height)
 
     @property
     def block(self):
@@ -172,6 +183,26 @@ class Tetrimino:
         self.rotation = obj.rotation
         self.shape = obj.shape
 
+    @property
+    def rowfix_top(self):
+        return count_empty_toprows(self)
+
+    @property
+    def rowfix_bot(self):
+        return count_empty_botrows(self)
+
+    @property
+    def colfix_left(self):
+        return count_empty_leftcols(self)
+
+    @property
+    def colfix_right(self):
+        return count_empty_rightcols(self)
+
+    def possible_cols(self, board_width):
+        return list(range(-self.colfix_left,
+                          board_width - self.width + self.colfix_right + 1))
+
 class Board:
     def __init__(self, width=BWIDTH, height=BHEIGHT):
         self.width, self.height = width, height
@@ -230,4 +261,14 @@ class Board:
     def place_tetrimino(self, tetrimino, topleft):
         result = tetrimino_to_board(tetrimino, self, topleft)
         self.data = result.data
-        
+
+
+def fall_pos(tetrimino, startpos, board):
+    def fits(pos): return tetrimino.fits_on(board, pos)
+    def inc_height(pos): return (pos[0], pos[1] + 1)
+    cpos = startpos
+    while fits(cpos):
+        cpos = inc_height(cpos)
+    if cpos == startpos:
+        raise TetriminoOverlap
+    return (cpos[0], cpos[1] - 1)

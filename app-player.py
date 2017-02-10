@@ -4,11 +4,12 @@ import pygame
 
 import qclock
 from colors import Color
-from gamecls import TetriminoOverlap
-from game import Game
+from gamecls import Tetrimino, TetriminoOverlap
+from game import Game, GameOver
 from extdraw import draw_rect
 
-from qgenes import agg_height, complete_lines, count_holes, bumpiness
+from qgenes import agg_height, complete_lines, count_holes, bumpiness, fitness
+from qutils import get_possible_outcomes, get_possible_boards
 
 BOARD_SIZE = (10, 20)
 WINDOW_SIZE = (500, 660)
@@ -20,28 +21,58 @@ BOARD_POSFIX = (30, 30)
 SCORE_POS = (360, 90)
 NTBOX_POS = (360, 220)
 
+DRAWGRID = True
+
 NODELAY = False
+FASTMODE = False
 
 def set_nodelay(boolean):
     global NODELAY, FPS, GSECS, GSECS_DOWN, MSECS
     NODELAY = boolean
     if NODELAY:
+        set_fastmode(False)
         FPS = GSECS = GSECS_DOWN = MSECS = 0
     else:
         FPS = 120
         GSECS = 0.3
         GSECS_DOWN = 0.1
         MSECS = 0.1
-    
-def toggle_delay(forced_value=None):
+
+def toggle_delay():
     global NODELAY
     NODELAY = not NODELAY
     set_nodelay(NODELAY)
+
+
+def set_fastmode(boolean):
+    global FASTMODE, GSECS, GSECS_DOWN
+    FASTMODE = boolean
+    if FASTMODE:
+        set_nodelay(False)
+        GSECS = GSECS_DOWN = 0.01
+    else:
+        GSECS = 0.3
+        GSECS_DOWN = 0.1
+
+def toggle_fastmode():
+    global FASTMODE
+    FASTMODE = not FASTMODE
+    set_fastmode(FASTMODE)
 
 DBGSECS = 0.1
 
 set_nodelay(NODELAY)
 
+#aggheight, completelines, holes, bumpiness
+AI_HINTS = True
+AI_CONTROL = True
+WEIGHTS = [-100,
+           1000,
+           -3000,
+           -200]
+
+if AI_CONTROL:
+    set_fastmode(True)
 
 class App(Game):
     def __init__(self, screen, *, board_size=BOARD_SIZE):
@@ -99,11 +130,15 @@ class App(Game):
                     
                     elif event.key == pygame.K_n:
                         toggle_delay()
-                    
 
+                    elif event.key == pygame.K_f:
+                        toggle_fastmode()
+                    
+            #Pause
             while pausing:
                 quitting = self.check_for_quit()
                 if quitting: return
+                #Unpause
                 for event in pygame.event.get(pygame.KEYDOWN):
                     if event.key == pygame.K_p:
                         pausing = False
@@ -115,7 +150,7 @@ class App(Game):
             moving["right"] = pressed_keys[pygame.K_RIGHT]
             
             ## Logic ##
-            #Randomize if empty
+            #New falling tetrimino
             if self.ftetrimino is None:
                 rand = self.random_valid_tetrimino()
                 if rand is None:
@@ -123,6 +158,22 @@ class App(Game):
                     break
                 else:
                     self.ftetrimino, self.fpos = rand
+                    self.outcomes = get_possible_outcomes(self.board, self.ftetrimino)
+                    self.pboards = get_possible_boards(self.board, self.outcomes)
+                    fitness_fix = count_holes(self.board) * WEIGHTS[2]
+                    self.fitness_vals = {b: fitness(b, WEIGHTS) - fitness_fix for b in self.pboards}
+                    self.best_idx = max(range(len(self.outcomes)),
+                                        key=lambda x: self.fitness_vals[self.pboards[x]])
+                    self.best_outcome = self.outcomes[self.best_idx]
+                    dct = {(out["start_pos"], out["rotation"]): self.fitness_vals[board]
+                           for out, board in zip(self.outcomes, self.pboards)}
+                    print("New")
+                    for k, v in sorted(dct.items(), key=lambda x: x[1]):
+                        print(k, v)
+                    if AI_CONTROL:
+                        print("Best move fitness:", max(self.fitness_vals.values()))
+                        self.fpos = (self.best_outcome["start_pos"][0], self.fpos[1])
+                        self.ftetrimino.rotate(self.best_outcome["rotation"])
 
             #Rotate
             if self.ftetrimino is not None:
@@ -146,7 +197,11 @@ class App(Game):
             if qclocks["gravity"].passed(gseconds):
                 qclocks["gravity"].tick()
                 if self.ftetrimino is not None:
-                    self.gravity_full()
+                    try:
+                        self.gravity_full()
+                    except GameOver:
+                        self.game_over()
+                        break
 
             #Check for full lines
             self.check_for_full()
@@ -192,10 +247,15 @@ class App(Game):
         midx = (WINDOW_SIZE[0] - self.gameovertext.get_width()) / 2
         self.screen.blit(self.gameovertext, (midx, 4))
         pygame.display.flip()
-        while True:
-            quitting = self.check_for_quit()
-            if quitting:
-                return
+        if AI_CONTROL:
+            time.sleep(1)
+            self.resetting = True
+            return
+        else:
+            while True:
+                quitting = self.check_for_quit()
+                if quitting:
+                    return
 
     @staticmethod
     def draw_block_to(surface, block, x, y, alpha=None):
@@ -211,23 +271,46 @@ class App(Game):
         draw_rect(surface, color2,
                   pygame.Rect(x, y, BLOCK_SIZE, BLOCK_SIZE), 2)
 
+    @staticmethod
+    def draw_outline(surface, x, y, color):
+        draw_rect(surface, color,
+                  pygame.Rect(x, y, BLOCK_SIZE, BLOCK_SIZE), 1)
+
     def draw_ghost(self):
         t = (None, "hit_already")
         if self.last_fpos not in t and self.ftetrimino is not None:
             block = self.ftetrimino.block
             for col, row in self.ftetrimino.blocks_on(self.last_fpos):
                 x, y = col * BLOCK_SIZE, row * BLOCK_SIZE
-                draw_rect(self.board_surface, Color.LBLUE,
-                          pygame.Rect(x, y, BLOCK_SIZE, BLOCK_SIZE), 1)
+                self.draw_outline(self.board_surface, x, y, Color.LBLUE)
+                self.drawn_outlines.append(((col, row), Color.LBLUE))
+
+    def draw_hint(self):
+        t = Tetrimino(self.best_outcome["name"])
+        t.rotate(self.best_outcome["rotation"])
+        for col, row in t.blocks_on(self.best_outcome["fall_pos"]):
+            x, y = col * BLOCK_SIZE, row * BLOCK_SIZE
+            if ((col, row), Color.LBLUE) not in self.drawn_outlines:
+                color = Color.RED
+            else:
+                color = Color.PURPLE
+            self.draw_outline(self.board_surface, x, y, color)
+            self.drawn_outlines.append(((col, row), color))
+        
     
     def draw_board(self, board):
         for y, row in enumerate(board):
             for x, block in enumerate(row):
-                if block.empty:
-                    continue
                 fx, fy = x * BLOCK_SIZE, y * BLOCK_SIZE
-                self.draw_block_to(self.board_surface, block, fx, fy)
+                if block.empty:
+                    if DRAWGRID:
+                        self.draw_outline(self.board_surface, fx, fy,
+                                          Color.EBLUE)
+                else:
+                    self.draw_block_to(self.board_surface, block, fx, fy)
         self.draw_ghost()
+        if AI_HINTS:
+            self.draw_hint()
 
     def draw_board_to_screen(self):
         self.screen.blit(self.board_surface, BOARD_POSFIX)
@@ -275,6 +358,8 @@ class App(Game):
         self.draw_next_tetrimino()
         
     def draw_full(self):
+        self.drawn_outlines = []
+        
         self.screen.fill(Color.BLACK)
         self.board_surface.fill(Color.DBLUE)
             
@@ -290,10 +375,15 @@ class App(Game):
 if __name__ == "__main__":
     pygame.init()
     screen = pygame.display.set_mode(WINDOW_SIZE, pygame.SRCALPHA)
+    hiscore = 0
     while True:
         screen.fill(Color.BLACK)
         app = App(screen)
         app.run()
+        if app.score > hiscore:
+            hiscore = app.score
+            print("New high score:", hiscore)
+        print("High score:", hiscore)
         if not app.resetting:
             break
     pygame.quit()
