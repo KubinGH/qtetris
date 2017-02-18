@@ -12,19 +12,15 @@ def _top_nonempty(column):
             result = i + 1
     return result
 
-def agg_height(board):
-    for i, row in enumerate(reversed(board.rows)):
-        if any(not e.empty for e in row):
-            continue
-        else:
-            #the first empty row
-            return i
-    return len(board.rows)
+def agg_height(board, top_nonempty_list=None):
+    if top_nonempty_list is None:
+        top_nonempty_list = [_top_nonempty(col) for col in board.columns]
+    return sum(top_nonempty_list)
 
 def complete_lines(board):
     count = 0
-    for row in board.rows:
-        if all(not e.empty for e in row):
+    for row in board.mask:
+        if not any(e for e in row):
             count += 1
     return count
 
@@ -46,24 +42,28 @@ def _pairs01(seq):
         yield last, item
         last = item
 
-def bumpiness(board):
+def bumpiness(board, top_nonempty_list=None):
     count = 0
-    for first, second in _pairs01(board.columns):
-        first_top, second_top = _top_nonempty(first), _top_nonempty(second)
+    if top_nonempty_list is None:
+        top_nonempty_list = [_top_nonempty(col) for col in board.columns]
+    for first_top, second_top in _pairs01(top_nonempty_list):
         count += abs(first_top - second_top)
     return count
 
-def get_parameters(board):
-    return [agg_height(board),
-            complete_lines(board),
-            count_holes(board),
-            bumpiness(board)]
-
-def fitness_wp(parameters, weights):
+def fitness_pw(parameters, weights):
     return sum(param * weight for param, weight in zip(parameters, weights))
 
+def get_parameters(board):
+    top_nonempty_list = [_top_nonempty(col) for col in board.columns]
+    parameters = [agg_height(board, top_nonempty_list),
+                  complete_lines(board),
+                  count_holes(board),
+                  bumpiness(board, top_nonempty_list)]
+    return parameters
+
 def fitness(board, weights):
-    return fitness_wp(get_parameters(board), weights)
+    parameters = get_parameters(board)
+    return fitness_pw(parameters, weights)
 
 
 class qDNA(NumDNA):
@@ -93,7 +93,6 @@ class qSpecimen(Specimen):
         else:
             w1 = w2 = 0
         w1 += 1; w2 += 1
-        print(w1, w2)
         data1, data2 = self.dna.data, other.dna.data
         rdata = []
         for item1, item2 in zip(data1, data2):

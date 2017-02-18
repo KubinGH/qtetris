@@ -60,7 +60,7 @@ class Specimen:
         self.fit_function = fit_function
         self._fitness = NOFITNESS
     def __repr__(self):
-        return "{0.__class__.__name__}({0.dna}, {0.fit_function})".format(self)
+        return "{0.__class__.__name__}({0.dna}, <function {0.fit_function.__name__}>)".format(self)
 
     @property
     def _astuple(self):
@@ -82,9 +82,9 @@ class Specimen:
     def fitness(self):
         return self.calculate_fitness()
 
-    def calculate_fitness(self):
+    def calculate_fitness(self, **kwargs):
         if self._fitness is NOFITNESS:
-            self._fitness = self.fit_function()
+            self._fitness = self.fit_function(self, **kwargs)
         return self._fitness
 
 if __name__ == "__main__":

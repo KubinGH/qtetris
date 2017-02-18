@@ -1,28 +1,30 @@
 import random
-from gamecls import Block, Tetrimino, TetriminoOverlap, Board, fall_pos
-
+from gamecls import Block, Tetrimino, TetriminoOverlap, Board, fall_pos, random_tetrimino_letter_gen
+from qgenes import agg_height, complete_lines, count_holes, bumpiness, fitness
+from qutils import get_possible_outcomes, get_possible_boards
 
 BWIDTH, BHEIGHT = (10, 20)
 
 SCORE_PER_LINES = [0, 40, 100, 300, 1200]
-
-RANDOM_POS_TRIES = 1
 
 class GameOver(Exception): pass
 
 class Game:
     def __init__(self, bwidth=BWIDTH, bheight=BHEIGHT):
         self.board = Board(bwidth, bheight)
-        self.fboard = self.board.copy()
         self.reset_falling()
         self.last_fpos = self.last_fpos_rot = None
         self.last_fpos_setpoint = self.fpos
-        self.next_tetrimino = Tetrimino.random()
+        self.tetrimino_letter_generator = random_tetrimino_letter_gen()
+        self.next_tetrimino = Tetrimino.random(self.tetrimino_letter_generator)
         self.swapped_f = False
-        self.score = 0
+        self.just_placed_tetrimino = False
+        self.score = self.dropped_tetriminos = 0
+        self.best_outcome = None
 
     def reset_falling(self):
-        self.ftetrimino = self.fpos = None
+        self.ftetrimino = None
+        self.fpos = (None, None)
         
     def swap_falling(self):
         if self.swapped_f:
@@ -47,11 +49,10 @@ class Game:
     
     def random_valid_tetrimino(self):
         tetrimino = self.next_tetrimino
-        self.next_tetrimino = Tetrimino.random()
-        for _ in range(RANDOM_POS_TRIES):
-            rand_fpos = self.random_valid_fpos(tetrimino)
-            if rand_fpos is not None:
-                return tetrimino, rand_fpos
+        self.next_tetrimino = Tetrimino.random(self.tetrimino_letter_generator)
+        rand_fpos = self.random_valid_fpos(tetrimino)
+        if rand_fpos is not None:
+            return tetrimino, rand_fpos
         return None
 
     def process_gravity(self):
@@ -70,31 +71,18 @@ class Game:
     def gravity_full(self):
         gravity_status = self.process_gravity()
         if gravity_status == "hit":
-            try:
-                self.board.place_tetrimino(self.ftetrimino, self.fpos)
-            except TetriminoOverlap:
-                raise GameOver
-            self.fboard = self.board.copy()
+            self.board.place_tetrimino(self.ftetrimino, self.fpos)
+            self.just_placed_tetrimino = True
+            self.dropped_tetriminos += 1
             self.reset_falling()
             self.swapped_f = False
-
-    def get_last_fpos(self):
-        fits_on = lambda pos: self.ftetrimino.fits_on(self.board, pos)
-        next_fpos = (self.fpos[0], self.fpos[1] + 1)
-        free = fits_on(next_fpos)
-        if not free: return "hit_already"
-        else:
-            while free:
-                next_fpos = (next_fpos[0], next_fpos[1] + 1)
-                free = fits_on(next_fpos)
-            return (next_fpos[0], next_fpos[1] - 1)
 
     def get_last_fpos(self):
         r = fall_pos(self.ftetrimino, self.fpos, self.board)
         return "hit_already" if r[1] == self.fpos[1] else r
 
     def set_last_fpos(self):
-        if self.fpos != self.last_fpos_setpoint or  \
+        if self.fpos[0] != self.last_fpos_setpoint[0] or  \
                self.ftetrimino.rotation != self.last_fpos_rot:
             self.last_fpos_setpoint = self.fpos
             self.last_fpos_rot = self.ftetrimino.rotation
@@ -106,15 +94,14 @@ class Game:
         while not done:
             done = True
             to_pop = None
-            for i, row in enumerate(self.board.data):
-                if all(not block.empty for block in row):
+            for i, row in enumerate(self.board.mask):
+                if all(not block for block in row):
                     lines += 1
                     to_pop = i
                     done = False
                     break
             if to_pop is not None:
-                self.board.data.pop(to_pop)
-                self.board.data.insert(0, self.board.empty_row())
+                self.board.delete_row(to_pop)
 
         self.score += SCORE_PER_LINES[lines]
 
@@ -133,6 +120,55 @@ class Game:
         next_pos = (self.fpos[0] - 1, self.fpos[1])
         if self.ftetrimino.fits_on(self.board, next_pos):
             self.fpos = next_pos
+            
+    def ai_compute_outcomes(self, weights, *, double=True):
+        if double:
+            outcomes = get_possible_outcomes(self.board, self.ftetrimino)
+            if not outcomes:
+                return None
+            pboards = get_possible_boards(self.board, outcomes)
+            max_fitness = float("-inf"); best_outcome = None
+            for i, pboard in enumerate(pboards):
+                outcomes2 = get_possible_outcomes(pboard, self.next_tetrimino)
+                pboards2 = get_possible_boards(pboard, outcomes2)
+                fitness_vals = {b: fitness(b, weights) for b in pboards2}
+                best_fitness = max(fitness_vals.values())
+                if best_fitness > max_fitness:
+                    max_fitness = best_fitness              
+                    best_outcome = outcomes[i]
+            self.best_outcome = best_outcome
+        else:
+            outcomes = get_possible_outcomes(self.board, self.ftetrimino)
+            if not outcomes:
+                return None
+            pboards = get_possible_boards(self.board, outcomes)
+            fitness_vals = {b: fitness(b, weights) for b in pboards}
+            best_idx = max(range(len(outcomes)),
+                                key=lambda x: fitness_vals[pboards[x]])
+            self.best_outcome = outcomes[best_idx]
+
+    def ai_move(self):
+        self.fpos = self.best_outcome["start_pos"]
+        self.ftetrimino.rotate(self.best_outcome["rotation"])      
+    
+    def handle_new_falling_tetrimino(self):
+        rand = self.random_valid_tetrimino()
+        if rand is None:
+            return "game_over"
+        else:
+            self.ftetrimino, self.fpos = rand
+            return "ok"
+
+    def handle_gravity(self):
+        try:
+            self.gravity_full()
+        except TetriminoOverlap:
+            return "game_over"
+        else:
+            return "ok"
+        
+    
+
 
 if __name__ == "__main__":
     game = Game()

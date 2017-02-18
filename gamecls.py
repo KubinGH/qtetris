@@ -2,12 +2,11 @@ import random
 import itertools
 
 from colors import Color
-from shapedata import shape_names, shapes, shape_colors, \
+from shapedata import shape_names, shapes, shape_colors, pc_blocks_on, \
                       count_empty_toprows, \
                       count_empty_botrows, \
                       count_empty_leftcols, \
                       count_empty_rightcols
-                    
 
 BSIZE = (10, 20)
 BWIDTH, BHEIGHT = BSIZE
@@ -15,24 +14,24 @@ BWIDTH, BHEIGHT = BSIZE
 class TetriminoOverlap(Exception): pass
 
 class Block:
-    def __init__(self, color, num, empty=False):
+    def __init__(self, color, *, empty=False):
         self.color = color
-        self.num = num
         self.empty = empty
 
     def __repr__(self):
         if not self.empty:
-            return "<Block({0}, {1})>".format(self.color, self.num)
+            return "<Block({0})>".format(self.color)
         else:
             return "<empty Block>"
         
     @classmethod
     def emptyblock(cls):
-        return Block(None, 0, empty=True)
+        return Block(None, empty=True)
 
     def __bool__(self):
         return not self.empty
 
+emptyblock_b = Block.emptyblock()
 
 def tetrimino_to_board(tetrimino, o_board, topleft, docopy=True):
     if docopy:  board = o_board.copy()
@@ -41,9 +40,9 @@ def tetrimino_to_board(tetrimino, o_board, topleft, docopy=True):
     for col, row in tetrimino.blocks_on():
         if tetrimino.shape[row][col]:
             bcol, brow = col + left, row + top
-            if board[brow][bcol]: raise TetriminoOverlap()
+            if board[bcol, brow]: raise TetriminoOverlap()
             if brow < 0 or bcol < 0: raise IndexError("Negative index")
-            board[brow][bcol] = tetrimino.block
+            board[bcol, brow] = tetrimino.block
 
     return board
 
@@ -60,15 +59,16 @@ def permutation_random_generator(sequence, _forced=_FORCEDSEQ, _disabled=_DISABL
             if item not in _disabled:
                 yield item
 
-random_tetrimino_letter = permutation_random_generator(shape_names)
+def random_tetrimino_letter_gen():
+    return permutation_random_generator(shape_names)
+
+random_tetrimino_letter = random_tetrimino_letter_gen()
 
 class Tetrimino:
-    tnums = itertools.count(1)
     def __init__(self, shapename, shapes=shapes, colors=shape_colors, rotation=0):
         self.name = shapename
         self.shape = shapes[self.name]
         self.color = colors[self.name]
-        self.num = next(Tetrimino.tnums)
         self.rotation = 0
 
     def __repr__(self):
@@ -97,8 +97,8 @@ class Tetrimino:
         return obj
     
     @classmethod
-    def random(cls, names=shape_names):
-        letter = next(random_tetrimino_letter)
+    def random(cls, names=shape_names, generator=random_tetrimino_letter):
+        letter = next(generator)
         return cls(letter)
 
     @property
@@ -115,14 +115,22 @@ class Tetrimino:
 
     @property
     def block(self):
-        return Block(self.color, self.num)
+        return Block(self.color)
 
-    def blocks_on(self, topleft=(0, 0)):
+    def _compute_blocks_on(self, topleft=(0, 0)):
         left, top = topleft
         for row in range(self.height):
             for col in range(self.width):
                 if self.shape[row][col]:
                     yield (col + left, row + top)
+
+    def blocks_on(self, topleft=(0, 0)):
+        blocks = pc_blocks_on[self.name][self.rotation]
+        if topleft != (0, 0):
+            lt, tp = topleft
+            return [(a + lt, b + tp) for a, b in blocks]
+        else:
+            return blocks
 
     def get_bounds(self):
         lft = top = float("INF")
@@ -148,14 +156,10 @@ class Tetrimino:
         return tetrimino_to_board(self, o_board, topleft)
 
     def fits_on(self, board, topleft):
-        left, top = topleft
-        for col, row in self.blocks_on():
-            bcol, brow = col + left, row + top
-            if brow < 0 or bcol < 0:
+        for bcol, brow in self.blocks_on(topleft):
+            if not 0 <= brow < board.height or not 0 <= bcol < board.width:
                 return False
-            elif bcol >= board.width or brow >= board.height:
-                return False
-            elif not board[brow][bcol].empty:
+            elif not board.isempty((bcol, brow)):
                 return False
         return True
                 
@@ -204,27 +208,47 @@ class Tetrimino:
                           board_width - self.width + self.colfix_right + 1))
 
 class Board:
-    def __init__(self, width=BWIDTH, height=BHEIGHT):
+    def __init__(self, width=BWIDTH, height=BHEIGHT, *, make_empty=True):
         self.width, self.height = width, height
-        self.data = [self.empty_row() for _ in range(self.height)]
+        self.data = [self.empty_row for _ in range(self.height)] if make_empty else None
+        self.mask = self.empty_mask() if make_empty else None
 
+    @property
     def empty_row(self):
-        return [Block.emptyblock() for _ in range(self.width)]
+        return [emptyblock_b for _ in range(self.width)]
+
+    @property
+    def empty_mrow(self):
+        return [True for _ in range(self.width)]
+    
+    def empty_mask(self):
+        return [self.empty_mrow for _ in range(self.height)]
+
+    @staticmethod
+    def make_mask(data):
+        return [[obj.empty for elem in row] for row in data]
 
     @classmethod
     def from_iterable(cls, iterable):
-        data = []
-        for row in iterable:
-            data.append([])
-            for item in row:
-                data[-1].append(item)
+        data = [[item for item in row] for row in iterable]
         board = Board(len(data[0]), len(data))
         board.data = data
+        board.mask = make_mask(data)
         return board
 
+    @classmethod
+    def from_param(cls, width, height, data, mask):
+        obj = cls(width, height, make_empty=False)
+        obj.data = data
+        obj.mask = mask
+        return obj
+
     def copy(self):
-        return Board.from_iterable(self)
-        
+        datacopy = [row.copy() for row in self.data]
+        maskcopy = [row.copy() for row in self.mask]
+        result = Board.from_param(self.width, self.height, datacopy, maskcopy)
+        return result
+
     def __repr__(self):
         return "<Board({0}, {1})>".format(self.width, self.height)
 
@@ -242,10 +266,25 @@ class Board:
         return len(self.data)
     
     def __getitem__(self, index):
-        return self.data[index]
-
+        col, row = index
+        if col is not None:
+            return self.data[row][col]
+        else:
+            return self.data[row]
+  
     def __setitem__(self, index, obj):
-        self.data[index] = obj
+        col, row = index
+        if col is not None:
+            assert isinstance(obj, Block), "Board can only contain Blocks"
+            self.data[row][col] = obj
+            self.mask[row][col] = obj.empty
+        else:
+            print("row set")
+            self.data[row] = obj
+
+    def isempty(self, index):
+        col, row = index
+        return self.mask[row][col]
 
     @property
     def rows(self):
@@ -260,7 +299,11 @@ class Board:
 
     def place_tetrimino(self, tetrimino, topleft):
         result = tetrimino_to_board(tetrimino, self, topleft)
-        self.data = result.data
+        self.data = result.data; self.mask = result.mask
+
+    def delete_row(self, row_idx):
+        self.data.pop(row_idx); self.data.insert(0, self.empty_row)
+        self.mask.pop(row_idx); self.mask.insert(0, self.empty_mrow)
 
 
 def fall_pos(tetrimino, startpos, board):
