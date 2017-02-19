@@ -4,7 +4,7 @@ from app_ai import App
 
 import random; random.seed(20)
 
-app = App()
+app = App(tetrimino_limit=500)
 cProfile.run("app.run()", "profileresults")
 profile = pstats.Stats("profileresults")
-profile.sort_stats("time").strip_dirs().print_stats()
+profile.strip_dirs().sort_stats("time").print_stats()
