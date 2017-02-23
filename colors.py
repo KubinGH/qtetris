@@ -35,7 +35,7 @@ class Color:
 
     def by_name(self, name):
         name_upper = name.upper()
-        assert name_upper in COLORS
+        assert name_upper in self.COLORS
         return getattr(self, name_upper)
 
 _DUMMY = Color()

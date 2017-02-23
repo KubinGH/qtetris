@@ -43,14 +43,16 @@ def toggle_delay():
 
 
 def set_fastmode(boolean):
-    global FASTMODE, GSECS, GSECS_DOWN
+    global FASTMODE, GSECS, GSECS_DOWN, MSECS
     FASTMODE = boolean
     if FASTMODE:
         set_nodelay(False)
         GSECS = GSECS_DOWN = 0.01
+        MSECS = 0.01
     else:
         GSECS = 0.3
         GSECS_DOWN = 0.1
+        MSECS = 0.1
 
 def toggle_fastmode():
     global FASTMODE
@@ -61,8 +63,11 @@ DBGSECS = 0.1
 
 set_nodelay(NODELAY)
 
+AI_CONTROL_ROTSECS = 0.1
+
 AI_HINTS = False
 AI_CONTROL = True
+AI_CONTROL_VISIBLE = True
 #aggheight, completelines, holes, bumpiness
 #WEIGHTS = [-20, 1000, -3000, -10]
 WEIGHTS = [-0.510066, 0.760666, -0.35663, -0.184483]
@@ -84,6 +89,7 @@ class App(Game):
         self.scoreheader = self.font.render("Score", True, Color.WHITE)
         self.gameovertext = self.msgfont.render("Game Over!", True, Color.RED)
         self.r_next_tetrimino = self.nt_box = None
+        self.ai_seeked_fpos = self.ai_seeked_rot = None
         
     def run(self):
         self.board_surface = pygame.Surface(BOARD_SIZE_PX)
@@ -93,6 +99,8 @@ class App(Game):
                    "gravity":   qclock.Clock(),
                    "draw":      qclock.Clock(),
                    "dbg":       qclock.Clock()}
+
+        ai_control_rot_qclock = qclock.Clock()
 
         moving = {"right": False,
                   "left": False,
@@ -139,12 +147,34 @@ class App(Game):
                     if event.key == pygame.K_p:
                         pausing = False
                         break
-                        
 
-            moving["down"]  = pressed_keys[pygame.K_DOWN]
-            moving["left"]  = pressed_keys[pygame.K_LEFT]
-            moving["right"] = pressed_keys[pygame.K_RIGHT]
-            
+            #Set moving booleans      
+            if not AI_CONTROL:
+                moving["down"]  = pressed_keys[pygame.K_DOWN]
+                moving["left"]  = pressed_keys[pygame.K_LEFT]
+                moving["right"] = pressed_keys[pygame.K_RIGHT]
+            elif AI_CONTROL and AI_CONTROL_VISIBLE and not NODELAY:
+                if self.ai_seeked_fpos is not None and self.fpos[0] is not None:
+                    diff = self.fpos[0] - self.ai_seeked_fpos[0]
+                    if diff > 0:
+                        moving["left"] = True
+                    elif diff < 0:
+                        moving["right"] = True
+                    elif diff == 0:
+                        moving["left"] = moving["right"] = False
+                        moving["down"] = True
+                    
+                if self.ai_seeked_rot is not None and self.ftetrimino is not None:
+                    if self.ai_seeked_rot != self.ftetrimino.rotation:
+                        if ai_control_rot_qclock.passed(AI_CONTROL_ROTSECS):
+                            ai_control_rot_qclock.tick()
+                            do_rotate = True
+
+                if self.ai_seeked_fpos is not None and self.ai_seeked_rot is not None \
+                                      and self.ai_seeked_fpos == self.fpos \
+                                      and self.ai_seeked_rot == self.ftetrimino.rotation:
+                    moving["down"] == True
+                
             ## Logic ##
             #New falling tetrimino
             if self.ftetrimino is None:
@@ -152,10 +182,14 @@ class App(Game):
                 if status == "game_over":
                     self.game_over()
                     break
-                if any((AI_CONTROL, AI_HINTS)):
+                if AI_CONTROL or AI_HINTS:
                     self.ai_compute_outcomes(WEIGHTS)
                     if AI_CONTROL:
+                        if NODELAY or not AI_CONTROL_VISIBLE:
                             self.ai_move()
+                        else:
+                            self.ai_seeked_fpos = self.best_outcome["start_pos"]
+                            self.ai_seeked_rot = self.best_outcome["rotation"]
 
             if self.ftetrimino is not None: #Just to be sure
                 #Rotate

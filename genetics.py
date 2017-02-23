@@ -37,10 +37,10 @@ def weighted_average(numbers):
 
 #random weighted average
 def random_weighted_average(*args, points_w=4, points_r=4):
-    weights = [round(random.uniform(0.25, 0.75), points)
+    weights = [round(random.uniform(0.25, 0.75), points_w)
                for _ in range(len(args))]
     pairs = {k: v for k, v in zip(args, weights)}
-    return round(_wavg(pairs), points)
+    return round(_wavg(pairs), points_r)
 
 _avg = average
 _wavg = weighted_average
