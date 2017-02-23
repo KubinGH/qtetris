@@ -1,6 +1,6 @@
 import cProfile
 import pstats
-import pyximport; pyximport.install(pyimport=True)
+#import pyximport; pyximport.install(pyimport=True)
 from app_ai import App
 
 import random; random.seed(20)
