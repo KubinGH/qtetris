@@ -9,19 +9,36 @@ from game import Game
 from extdraw import draw_rect
 from qgenes import get_parameters
 
-BOARD_SIZE = (10, 20)
-WINDOW_SIZE = (500, 660)
-BLOCK_SIZE = 30
+DEFAULT_BOARD_SIZE = (10, 20)
+DEFAULT_BLOCK_SIZE = 30
+NTBOX_SIZE = (4, 5) #max sizes of tetrimino + 1
 
-BOARD_SIZE_PX = (300, 600)
-BOARD_POSFIX = (30, 30)
+def compute_graphics_constants(board_size, block_size):
+    global BOARD_SIZE, BLOCK_SIZE, \
+           WINDOW_SIZE, BOARD_SIZE_PX, BOARD_POSFIX, \
+           SCORE_POS, NTBOX_POS, NTBOX_SIZE_PX
 
-SCORE_POS = (360, 90)
-NTBOX_POS = (360, 220)
+    BOARD_SIZE, BLOCK_SIZE = board_size, block_size
+
+    BOARD_SIZE_PX = (board_size[0] * block_size, board_size[1] * block_size)
+    BOARD_POSFIX = (block_size, block_size)
+
+    WINDOW_SIZE = (BOARD_SIZE_PX[0] + 200, BOARD_SIZE_PX[1] + 2 * block_size)
+
+    SCORE_POS = (BOARD_SIZE_PX[0] + 2 * block_size, 3 * block_size)
+    NTBOX_POS = (BOARD_SIZE_PX[0] + 2 * block_size, int((7 + 1/3) * block_size))
+    
+    NTBOX_SIZE_PX = (NTBOX_SIZE[0] * block_size, NTBOX_SIZE[1] * block_size)
+    
+compute_graphics_constants(DEFAULT_BOARD_SIZE, DEFAULT_BLOCK_SIZE)
+#compute_graphics_constants((5, 20), 30)
 
 DRAWGRID = True
 
 NODELAY = False
+
+GSECS_FAST = GSECS_DOWN_FAST = 0.01
+MSECS_FAST = 0.0075
 FASTMODE = False
 
 def set_nodelay(boolean):
@@ -47,8 +64,8 @@ def set_fastmode(boolean):
     FASTMODE = boolean
     if FASTMODE:
         set_nodelay(False)
-        GSECS = GSECS_DOWN = 0.01
-        MSECS = 0.01
+        GSECS = GSECS_DOWN = GSECS_FAST
+        MSECS = MSECS_FAST
     else:
         GSECS = 0.3
         GSECS_DOWN = 0.1
@@ -63,7 +80,7 @@ DBGSECS = 0.1
 
 set_nodelay(NODELAY)
 
-AI_CONTROL_ROTSECS = 0.1
+AI_CONTROL_ROTSECS = 0.05
 
 AI_HINTS = False
 AI_CONTROL = True
@@ -183,7 +200,11 @@ class App(Game):
                     self.game_over()
                     break
                 if AI_CONTROL or AI_HINTS:
-                    self.ai_compute_outcomes(WEIGHTS)
+                    try:
+                        self.ai_compute_outcomes(WEIGHTS)
+                    except ValueError:
+                        self.game_over()
+                        break
                     if AI_CONTROL:
                         if NODELAY or not AI_CONTROL_VISIBLE:
                             self.ai_move()
@@ -344,17 +365,15 @@ class App(Game):
             self.draw_nt_box()
             return
         nt = self.next_tetrimino
-        ntbox_size = (4, 5)
-        ntbox_size_px = (BLOCK_SIZE * ntbox_size[0], BLOCK_SIZE * ntbox_size[1])
-        self.nt_box = pygame.Surface(ntbox_size_px)
+        self.nt_box = pygame.Surface(NTBOX_SIZE_PX)
         draw_rect(self.nt_box, Color.BLUE,
-                  pygame.Rect((0, 0), ntbox_size_px), 2)
+                  pygame.Rect((0, 0), NTBOX_SIZE_PX), 2)
 
         bounds = nt.get_bounds()
         left, right, top, bottom = bounds
         awidth, aheight = nt.get_actsize(bounds)
-        colfix = (ntbox_size[0] - awidth) / 2 - left
-        rowfix = (ntbox_size[1] - aheight) / 2 - top
+        colfix = (NTBOX_SIZE[0] - awidth) / 2 - left
+        rowfix = (NTBOX_SIZE[1] - aheight) / 2 - top
         nt_pos = (colfix * BLOCK_SIZE, rowfix * BLOCK_SIZE)
         for col, row in nt.blocks_on():
             this_pos = (nt_pos[0] + col * BLOCK_SIZE,

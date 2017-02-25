@@ -22,7 +22,11 @@ class App(Game):
                 if status == "game_over":
                     self.game_over()
                     break
-                self.ai_compute_outcomes(self.weights)
+                try:
+                    self.ai_compute_outcomes(self.weights)
+                except ValueError:
+                    self.game_over()
+                    break
                 #Moving & Rotating
                 self.ai_move()
 
