@@ -8,38 +8,80 @@ from gamecls import Tetrimino, TetriminoOverlap
 from game import Game
 from extdraw import draw_rect
 from qgenes import get_parameters
+from window_sizes import calc_board_posfix, calc_window_size, \
+                         calc_score_pos, calc_ntbox_pos
 
 DEFAULT_BOARD_SIZE = (10, 20)
 DEFAULT_BLOCK_SIZE = 30
 NTBOX_SIZE = (4, 5) #max sizes of tetrimino + 1
 
-def compute_graphics_constants(board_size, block_size):
+def _elem_mul(lst, num):
+    return tuple(item * num for item in lst)
+
+def set_graphics_constants(board_size, block_size):
     global BOARD_SIZE, BLOCK_SIZE, \
            WINDOW_SIZE, BOARD_SIZE_PX, BOARD_POSFIX, \
            SCORE_POS, NTBOX_POS, NTBOX_SIZE_PX
 
     BOARD_SIZE, BLOCK_SIZE = board_size, block_size
 
-    BOARD_SIZE_PX = (board_size[0] * block_size, board_size[1] * block_size)
-    BOARD_POSFIX = (block_size, block_size)
+    BOARD_SIZE_PX = _elem_mul(board_size, block_size)
+    BOARD_POSFIX = calc_board_posfix(board_size, block_size)
 
-    WINDOW_SIZE = (BOARD_SIZE_PX[0] + 200, BOARD_SIZE_PX[1] + 2 * block_size)
+    WINDOW_SIZE = calc_window_size(board_size, block_size)
 
-    SCORE_POS = (BOARD_SIZE_PX[0] + 2 * block_size, 3 * block_size)
-    NTBOX_POS = (BOARD_SIZE_PX[0] + 2 * block_size, int((7 + 1/3) * block_size))
+    SCORE_POS = calc_score_pos(board_size, block_size)
+    NTBOX_POS = calc_ntbox_pos(board_size, block_size)
     
-    NTBOX_SIZE_PX = (NTBOX_SIZE[0] * block_size, NTBOX_SIZE[1] * block_size)
-    
-compute_graphics_constants(DEFAULT_BOARD_SIZE, DEFAULT_BLOCK_SIZE)
-#compute_graphics_constants((5, 20), 30)
+    NTBOX_SIZE_PX = _elem_mul(NTBOX_SIZE, block_size)
+
+#set_graphics_constants(DEFAULT_BOARD_SIZE, DEFAULT_BLOCK_SIZE)
+set_graphics_constants((20, 30), 30)
+
+FULLSCREEN_WINDOW = False
+SCREEN = None
+
+def get_screen(*, fullscreen=FULLSCREEN_WINDOW):
+    global SCREEN
+    if SCREEN is None:
+        SCREEN = fullscreen_window(fullscreen)
+    return SCREEN
+
+def fullscreen_window(boolean):
+    global FULLSCREEN_WINDOW, WINDOW_SIZE, BOARD_POSFIX, \
+           SCORE_POS, NTBOX_POS
+
+    if boolean:
+        info = pygame.display.Info()
+        mwidth, mheight = info.current_w, info.current_h
+        set_graphics_constants(BOARD_SIZE, BLOCK_SIZE)
+        fix = ((mwidth  - WINDOW_SIZE[0]) // 2,
+               (mheight - WINDOW_SIZE[1]) // 2)
+        calcfix = lambda x: (x[0] + fix[0], x[1] + fix[1])
+        BOARD_POSFIX = calcfix(BOARD_POSFIX)
+        SCORE_POS = calcfix(SCORE_POS)
+        NTBOX_POS = calcfix(NTBOX_POS)
+        WINDOW_SIZE = (mwidth, mheight)
+        FULLSCREEN_WINDOW = True
+        return pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    else:
+        set_graphics_constants(BOARD_SIZE, BLOCK_SIZE)
+        return pygame.display.set_mode(WINDOW_SIZE)
+        
 
 DRAWGRID = True
 
-NODELAY = False
 
+FPS_DEFAULT = 120
+GSECS_DEFAULT = 0.3
+GSECS_DOWN_DEFAULT = 0.1
+MSECS_DEFAULT = 0.1
+
+FASTMODE = False
 GSECS_FAST = GSECS_DOWN_FAST = 0.01
 MSECS_FAST = 0.0075
-FASTMODE = False
+
+NODELAY = False
 
 def set_nodelay(boolean):
     global NODELAY, FPS, GSECS, GSECS_DOWN, MSECS
@@ -48,10 +90,10 @@ def set_nodelay(boolean):
         set_fastmode(False)
         FPS = GSECS = GSECS_DOWN = MSECS = 0
     else:
-        FPS = 120
-        GSECS = 0.3
-        GSECS_DOWN = 0.1
-        MSECS = 0.1
+        FPS = FPS_DEFAULT
+        GSECS = GSECS_DEFAULT
+        GSECS_DOWN = GSECS_DOWN_DEFAULT
+        MSECS = MSECS_DEFAULT
 
 def toggle_delay():
     global NODELAY
@@ -67,9 +109,9 @@ def set_fastmode(boolean):
         GSECS = GSECS_DOWN = GSECS_FAST
         MSECS = MSECS_FAST
     else:
-        GSECS = 0.3
-        GSECS_DOWN = 0.1
-        MSECS = 0.1
+        GSECS = GSECS_DEFAULT
+        GSECS_DOWN = GSECS_DOWN_DEFAULT
+        MSECS = MSECS_DEFAULT
 
 def toggle_fastmode():
     global FASTMODE
@@ -89,7 +131,9 @@ AI_CONTROL_VISIBLE = True
 #WEIGHTS = [-20, 1000, -3000, -10]
 WEIGHTS = [-0.510066, 0.760666, -0.35663, -0.184483]
 if AI_CONTROL:
+    MSECS_DEFAULT = 0.05
     set_fastmode(True)
+    
 
 class App(Game):
     def __init__(self, screen, *, board_size=BOARD_SIZE):
@@ -98,9 +142,11 @@ class App(Game):
         self.screen = screen
         self.resetting = False
         self.fboard = self.board.copy()
+        fontsize_large = int(50 * (BLOCK_SIZE / DEFAULT_BLOCK_SIZE))
+        fontsize_small = int(25 * (BLOCK_SIZE / DEFAULT_BLOCK_SIZE))
         try:
-            self.font = pygame.font.SysFont("Corbel", 50)
-            self.msgfont = pygame.font.SysFont("Monospace", 25, bold=True)
+            self.font = pygame.font.SysFont("Corbel", fontsize_large)
+            self.msgfont = pygame.font.SysFont("Monospace", fontsize_small, bold=True)
         except:
             self.font = self.msgfont = pygame.font.Font("freesansbold.ttf", 50)
         self.scoreheader = self.font.render("Score", True, Color.WHITE)
@@ -154,6 +200,9 @@ class App(Game):
 
                     elif event.key == pygame.K_f:
                         toggle_fastmode()
+
+                    elif event.key == pygame.K_q:
+                        done = True
                     
             #Pause
             while pausing:
@@ -208,6 +257,7 @@ class App(Game):
                     if AI_CONTROL:
                         if NODELAY or not AI_CONTROL_VISIBLE:
                             self.ai_move()
+                            self.ai_seeked_fpos = self.ai_seeked_rot = None
                         else:
                             self.ai_seeked_fpos = self.best_outcome["start_pos"]
                             self.ai_seeked_rot = self.best_outcome["rotation"]
@@ -410,7 +460,7 @@ class App(Game):
 
 if __name__ == "__main__":
     pygame.init()
-    screen = pygame.display.set_mode(WINDOW_SIZE, pygame.SRCALPHA)
+    screen = get_screen()
     hiscore = 0
     while True:
         screen.fill(Color.BLACK)

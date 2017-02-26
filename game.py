@@ -39,7 +39,7 @@ class Game:
 
     def random_valid_fpos(self, tetrimino):
         row = tetrimino.rowfix_top
-        possible_cols = tetrimino.possible_cols(BWIDTH)
+        possible_cols = tetrimino.possible_cols(self.board.width)
         random.shuffle(possible_cols)
         for col in possible_cols:
             fits = tetrimino.fits_on(self.board, (col, row))
