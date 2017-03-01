@@ -13,7 +13,7 @@ class Game:
     def __init__(self, bwidth=BWIDTH, bheight=BHEIGHT):
         self.board = Board(bwidth, bheight)
         self.reset_falling()
-        self.last_fpos = self.last_fpos_rot = None
+        self.last_fpos = self.last_fpos_rot = self.last_fpos_name = None
         self.last_fpos_setpoint = self.fpos
         self.tetrimino_letter_generator = random_tetrimino_letter_gen()
         self.next_tetrimino = Tetrimino.random(self.tetrimino_letter_generator)
@@ -83,10 +83,12 @@ class Game:
 
     def set_last_fpos(self):
         if self.fpos[0] != self.last_fpos_setpoint[0] or  \
-               self.ftetrimino.rotation != self.last_fpos_rot:
+               self.ftetrimino.rotation != self.last_fpos_rot or \
+               self.last_fpos_name != self.ftetrimino.name:
+            self.last_fpos = self.get_last_fpos()
             self.last_fpos_setpoint = self.fpos
             self.last_fpos_rot = self.ftetrimino.rotation
-            self.last_fpos = self.get_last_fpos()
+            self.last_fpos_name = self.ftetrimino.name
 
     def check_for_full(self):
         done = False

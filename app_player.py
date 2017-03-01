@@ -18,7 +18,7 @@ NTBOX_SIZE = (4, 5) #max sizes of tetrimino + 1
 def _elem_mul(lst, num):
     return tuple(item * num for item in lst)
 
-def set_graphics_constants(board_size, block_size):
+def set_constants(board_size, block_size):
     global BOARD_SIZE, BLOCK_SIZE, \
            WINDOW_SIZE, BOARD_SIZE_PX, BOARD_POSFIX, \
            SCORE_POS, NTBOX_POS, NTBOX_SIZE_PX
@@ -35,8 +35,7 @@ def set_graphics_constants(board_size, block_size):
     
     NTBOX_SIZE_PX = _elem_mul(NTBOX_SIZE, block_size)
 
-#set_graphics_constants(DEFAULT_BOARD_SIZE, DEFAULT_BLOCK_SIZE)
-set_graphics_constants((20, 30), 30)
+set_constants(DEFAULT_BOARD_SIZE, DEFAULT_BLOCK_SIZE)
 
 FULLSCREEN_WINDOW = False
 SCREEN = None
@@ -54,7 +53,7 @@ def fullscreen_window(boolean):
     if boolean:
         info = pygame.display.Info()
         mwidth, mheight = info.current_w, info.current_h
-        set_graphics_constants(BOARD_SIZE, BLOCK_SIZE)
+        set_constants(BOARD_SIZE, BLOCK_SIZE)
         fix = ((mwidth  - WINDOW_SIZE[0]) // 2,
                (mheight - WINDOW_SIZE[1]) // 2)
         calcfix = lambda x: (x[0] + fix[0], x[1] + fix[1])
@@ -65,7 +64,7 @@ def fullscreen_window(boolean):
         FULLSCREEN_WINDOW = True
         return pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
     else:
-        set_graphics_constants(BOARD_SIZE, BLOCK_SIZE)
+        set_constants(BOARD_SIZE, BLOCK_SIZE)
         return pygame.display.set_mode(WINDOW_SIZE)
         
 
@@ -189,7 +188,7 @@ class App(Game):
                         self.swap_falling()
                     
                     elif event.key == pygame.K_p:
-                        pausing = True
+                        pausing = not pausing
                     
                     elif event.key == pygame.K_r:
                         self.resetting = True
@@ -205,14 +204,8 @@ class App(Game):
                         done = True
                     
             #Pause
-            while pausing:
-                quitting = self.check_for_quit()
-                if quitting: return
-                #Unpause
-                for event in pygame.event.get(pygame.KEYDOWN):
-                    if event.key == pygame.K_p:
-                        pausing = False
-                        break
+            if pausing:
+                continue
 
             #Set moving booleans      
             if not AI_CONTROL:

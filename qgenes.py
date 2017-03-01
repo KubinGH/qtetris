@@ -19,10 +19,10 @@ def fitness_pw(parameters, weights):
 
 def get_parameters(board):
     top_nonempty_list = [top_nonempty(col) for col in board.columns]
-    parameters = [agg_height(board, top_nonempty_list),
-                  complete_lines(board),
-                  count_holes(board, top_nonempty_list),
-                  bumpiness(board, top_nonempty_list)]
+    parameters = [agg_height(top_nonempty_list),
+                  complete_lines(board.mask),
+                  count_holes(board.columns, top_nonempty_list),
+                  bumpiness(top_nonempty_list)]
     return parameters
 
 def fitness(board, weights):

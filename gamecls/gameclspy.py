@@ -2,22 +2,15 @@ import random
 import itertools
 
 from colors import Color
-from shapedata import t_rotations, shape_names, shapes, shape_colors, pc_blocks_on, t_lowest_blocks
+from shapedata import shape_names, shapes, shape_colors, pc_blocks_on
 
 BSIZE = (10, 20)
 BWIDTH, BHEIGHT = BSIZE
 
 class TetriminoOverlap(Exception): pass
 
-cpdef int rfind(sequence, item):
-    for i in range(len(sequence) - 1, -1, -1):
-        if sequence[i] == item: return i
-    return -1
-
-cdef class Block:
-    cdef public tuple color
-    cdef public bint empty
-    def __init__(self, tuple color, bint empty=False):
+class Block:
+    def __init__(self, color, *, empty=False):
         self.color = color
         self.empty = empty
 
@@ -27,20 +20,40 @@ cdef class Block:
         else:
             return "<empty Block>"
         
-    def emptyblock(self):
-        return Block((0, 0, 0), empty=True)
+    @classmethod
+    def emptyblock(cls):
+        return Block(None, empty=True)
 
     def __bool__(self):
         return not self.empty
-        
-cdef Block emptyblock_b = Block((0, 0, 0), empty=True)
 
-def permutation_random_generator(sequence):
+emptyblock_b = Block.emptyblock()
+
+def tetrimino_to_board(tetrimino, o_board, topleft, docopy=True):
+    if docopy:  board = o_board.copy()
+    else:       board = o_board 
+    left, top = topleft
+    for col, row in tetrimino.blocks_on():
+        if tetrimino.shape[row][col]:
+            bcol, brow = col + left, row + top
+            if board[bcol, brow]: raise TetriminoOverlap()
+            if brow < 0 or bcol < 0: raise IndexError("Negative index")
+            board[bcol, brow] = tetrimino.block
+
+    return board
+
+_FORCEDSEQ = []
+_DISABLED = []
+
+def permutation_random_generator(sequence, _forced=_FORCEDSEQ, _disabled=_DISABLED):
+    for item in _forced:
+        yield item
     while True:
         cseq = [item for item in sequence]
         random.shuffle(cseq)
         for item in cseq:
-            yield item
+            if item not in _disabled:
+                yield item
 
 def random_tetrimino_letter_gen():
     return permutation_random_generator(shape_names)
@@ -85,12 +98,8 @@ def count_empty_rightcols(tetrimino):
         else:
             break
     return counter
-    
-cdef class Tetrimino:
-    cdef public str name
-    cdef public list shape
-    cdef public tuple color
-    cdef public short rotation
+
+class Tetrimino:
     def __init__(self, shapename, shapes=shapes, colors=shape_colors, rotation=0):
         self.name = shapename
         self.shape = shapes[self.name]
@@ -99,6 +108,13 @@ cdef class Tetrimino:
 
     def __repr__(self):
         return "<Tetrimino({0})>".format(self.name)
+
+    def __eq__(self, other):
+        if not isinstance(other, Tetrimino):
+            return False
+        return self.shape == other.shape and \
+               self.color == other.color and \
+               self.rotation == other.rotation
         
     def copy(self):
         obj = Tetrimino.from_param(self.shape, self.color, self.rotation)
@@ -142,9 +158,8 @@ cdef class Tetrimino:
             for col in range(self.width):
                 if self.shape[row][col]:
                     yield (col + left, row + top)
-    
-    cpdef list blocks_on(self, tuple topleft=(0, 0)):
-        cdef list blocks
+
+    def blocks_on(self, topleft=(0, 0)):
         blocks = pc_blocks_on[self.name][self.rotation]
         if topleft != (0, 0):
             lt, tp = topleft
@@ -152,7 +167,7 @@ cdef class Tetrimino:
         else:
             return blocks
 
-    cpdef tuple get_bounds(self):
+    def get_bounds(self):
         lft = top = float("INF")
         rgt = bot = -float("INF")
         for block in self.blocks_on():
@@ -162,28 +177,44 @@ cdef class Tetrimino:
             bot = max(bot, block[1] + 1)
         return lft, rgt, top, bot
         
-    cpdef tuple get_actsize(self, bounds=None):
+    def get_actsize(self, bounds=None):
         lft, rgt, top, bot = self.get_bounds() if bounds is None else bounds
         return (rgt - lft, bot - top)
+            
+    def actwidth(self):
+        return self.actsize()[0]
+
+    def actheight(self):
+        return self.actsize()[1]
     
     def to_board(self, o_board, topleft):
         return tetrimino_to_board(self, o_board, topleft)
 
-    cpdef bint fits_on(self, Board board, tuple topleft):
-        cdef int bcol, brow
+    def fits_on(self, board, topleft):
         for bcol, brow in self.blocks_on(topleft):
             if not 0 <= brow < board.height or not 0 <= bcol < board.width:
                 return False
-            elif not board.isempty(bcol, brow):
+            elif not board.isempty((bcol, brow)):
                 return False
         return True
                 
-    cpdef Tetrimino rotated(self, int times=1):
-        cdef int next_rotation = (self.rotation + times) % 4
-        cdef list next_shape = t_rotations[self.name][next_rotation]
-        cdef Tetrimino obj = Tetrimino.from_param(next_shape, self.color)
+    def rotated(self, times=1):
+        if times > 0:
+            rotate = lambda shape: list(list(row) for row in zip(*shape[::-1]))
+        elif times < 0:
+            rotate = lambda shape: list(list(row) for row in zip(*shape))[::-1]
+
+        i = -1 if times < 0 else 1
+        rotation = self.rotation
+        shape = self.shape
+        for _ in range(abs(times)):
+            rotation += i
+            shape = rotate(shape)
+        rotation = (rotation + 4) % 4
+
+        obj = Tetrimino.from_param(shape, self.color)
         obj.name = self.name
-        obj.rotation = next_rotation
+        obj.rotation = rotation
         return obj
 
     def rotate(self, times=1):
@@ -211,23 +242,8 @@ cdef class Tetrimino:
         return list(range(-self.colfix_left,
                           board_width - self.width + self.colfix_right + 1))
 
-    cpdef list _get_lowest_block_pos(self):
-        cdef list result
-        cdef int this
-        result = []
-        for column in list(zip(*self.shape)):
-            this = rfind(column, 1)
-            result.append(this)
-        return result
-    
-    cpdef list get_lowest_block_pos(self):
-        return t_lowest_blocks[self.name][self.rotation]
-        
-cdef class Board:
-    cdef public int width, height
-    cdef public list data
-    cdef public list mask
-    def __init__(self, int width=BWIDTH, int height=BHEIGHT, bint make_empty=True):
+class Board:
+    def __init__(self, width=BWIDTH, height=BHEIGHT, *, make_empty=True):
         self.width, self.height = width, height
         self.data = [self.empty_row for _ in range(self.height)] if make_empty else None
         self.mask = self.empty_mask() if make_empty else None
@@ -301,7 +317,8 @@ cdef class Board:
             print("row set")
             self.data[row] = obj
 
-    cpdef bint isempty(self, int col, int row):
+    def isempty(self, index):
+        col, row = index
         return self.mask[row][col]
 
     @property
@@ -323,53 +340,13 @@ cdef class Board:
         self.data.pop(row_idx); self.data.insert(0, self.empty_row)
         self.mask.pop(row_idx); self.mask.insert(0, self.empty_mrow)
 
-cpdef Board tetrimino_to_board(Tetrimino tetrimino, Board o_board, tuple topleft, bint docopy=True):
-    if docopy:  board = o_board.copy()
-    else:       board = o_board 
-    left, top = topleft
-    for col, row in tetrimino.blocks_on():
-        if tetrimino.shape[row][col]:
-            bcol, brow = col + left, row + top
-            if board[bcol, brow]: raise TetriminoOverlap()
-            if brow < 0 or bcol < 0: raise IndexError("Negative index")
-            board[bcol, brow] = tetrimino.block
 
-    return board
-    
-cpdef tuple fall_pos_old(Tetrimino tetrimino, tuple startpos, Board board):
-    cdef int srow, scol, crow, ccol
-    scol, srow = startpos
-    ccol, crow = scol, srow
-    while tetrimino.fits_on(board, (ccol, crow)):
-        crow += 1
-    if crow == srow:
+def fall_pos(tetrimino, startpos, board):
+    def fits(pos): return tetrimino.fits_on(board, pos)
+    def inc_height(pos): return (pos[0], pos[1] + 1)
+    cpos = startpos
+    while fits(cpos):
+        cpos = inc_height(cpos)
+    if cpos == startpos:
         raise TetriminoOverlap
-    return (ccol, crow - 1)
-
-cpdef tuple fall_pos(Tetrimino tetrimino, tuple startpos, Board board):
-    cdef int startrow, startcol, actwidth, actheight, lowest
-    cdef int iterrow, itercol, boardcol, boardrow
-    cdef list lowest_block_pos
-    startcol, startrow = startpos
-    lowest_block_pos = tetrimino.get_lowest_block_pos()
-    iterrow = startrow - 1
-    while True:
-        iterrow += 1
-        for itercol in range(tetrimino.width):
-            lowest = lowest_block_pos[itercol]
-            boardcol = itercol + startcol
-            boardrow = iterrow + lowest_block_pos[itercol]
-            if lowest_block_pos[itercol] == -1:
-                continue
-            if board.height <= boardrow:
-                break
-            if not board.isempty(boardcol, boardrow):
-                break
-        else:
-            continue
-        break        
-             
-    if iterrow == startrow:
-        return (startcol, startrow)
-    return (startcol, iterrow - 1)
-    
+    return (cpos[0], cpos[1] - 1)
