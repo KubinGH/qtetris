@@ -124,6 +124,7 @@ class Game:
             self.fpos = next_pos
             
     def ai_compute_outcomes(self, weights, *, double=True):
+        self.cpboards = []
         if double:
             outcomes = get_possible_outcomes(self.board, self.ftetrimino)
             if not outcomes:
@@ -133,6 +134,7 @@ class Game:
             for i, pboard in enumerate(pboards):
                 outcomes2 = get_possible_outcomes(pboard, self.next_tetrimino)
                 pboards2 = get_possible_boards(pboard, outcomes2)
+                self.cpboards.extend(pboards2)
                 fitness_vals = {b: fitness(b, weights) for b in pboards2}
                 best_fitness = max(fitness_vals.values())
                 if best_fitness > max_fitness:

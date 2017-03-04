@@ -80,6 +80,11 @@ FASTMODE = False
 GSECS_FAST = GSECS_DOWN_FAST = 0.01
 MSECS_FAST = 0.0075
 
+SLOWMODE = False
+GSECS_SLOW = 0.5
+GSECS_DOWN_SLOW = 0.2
+MSECS_SLOW = 0.15
+
 NODELAY = False
 
 def set_nodelay(boolean):
@@ -87,6 +92,7 @@ def set_nodelay(boolean):
     NODELAY = boolean
     if NODELAY:
         set_fastmode(False)
+        set_slowmode(False)
         FPS = GSECS = GSECS_DOWN = MSECS = 0
     else:
         FPS = FPS_DEFAULT
@@ -105,6 +111,7 @@ def set_fastmode(boolean):
     FASTMODE = boolean
     if FASTMODE:
         set_nodelay(False)
+        set_slowmode(False)
         GSECS = GSECS_DOWN = GSECS_FAST
         MSECS = MSECS_FAST
     else:
@@ -117,9 +124,30 @@ def toggle_fastmode():
     FASTMODE = not FASTMODE
     set_fastmode(FASTMODE)
 
+def set_slowmode(boolean):
+    global SLOWMODE, GSECS, GSECS_DOWN, MSECS
+    SLOWMODE = boolean
+    if SLOWMODE:
+        set_nodelay(False)
+        set_fastmode(False)
+        GSECS = GSECS_SLOW
+        GSECS_DOWN = GSECS_DOWN_SLOW
+        MSECS = MSECS_SLOW
+    else:
+        GSECS = GSECS_DEFAULT
+        GSECS_DOWN = GSECS_DOWN_DEFAULT
+        MSECS = MSECS_DEFAULT
+
+def toggle_slowmode():
+    global SLOWMODE
+    SLOWMODE = not SLOWMODE
+    set_slowmode(SLOWMODE)
+
 DBGSECS = 0.1
 
 set_nodelay(NODELAY)
+set_fastmode(FASTMODE)
+set_slowmode(SLOWMODE)
 
 AI_CONTROL_ROTSECS = 0.05
 
@@ -152,10 +180,9 @@ class App(Game):
         self.gameovertext = self.msgfont.render("Game Over!", True, Color.RED)
         self.r_next_tetrimino = self.nt_box = None
         self.ai_seeked_fpos = self.ai_seeked_rot = None
+        self.board_surface = pygame.Surface(BOARD_SIZE_PX)
         
     def run(self):
-        self.board_surface = pygame.Surface(BOARD_SIZE_PX)
-
         qclocks = {"left":      qclock.Clock(),
                    "right":     qclock.Clock(),
                    "gravity":   qclock.Clock(),
@@ -199,6 +226,9 @@ class App(Game):
 
                     elif event.key == pygame.K_f:
                         toggle_fastmode()
+
+                    elif event.key == pygame.K_s:
+                        toggle_slowmode()
 
                     elif event.key == pygame.K_q:
                         done = True
@@ -306,6 +336,7 @@ class App(Game):
 
             if qclocks["dbg"].passed(DBGSECS):
                 qclocks["dbg"].tick()
+                print(int(NODELAY), int(FASTMODE), int(SLOWMODE))
             
             pygame.display.flip()
             clock.tick(FPS)
@@ -454,6 +485,7 @@ class App(Game):
 if __name__ == "__main__":
     pygame.init()
     screen = get_screen()
+    pygame.display.set_caption("qTetris")
     hiscore = 0
     while True:
         screen.fill(Color.BLACK)
