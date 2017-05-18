@@ -23,17 +23,25 @@ fullscreen = True
 
 pygame.init()
 
+info = pygame.display.Info()
+mwidth, mheight = info.current_w, info.current_h
+
 # Initialize constants
 app_player.set_constants((10, 20), 20)
 app_player.WINDOW_SIZE = (app_player.BOARD_SIZE_PX[0] * 2 + app_player.BLOCK_SIZE,
                           app_player.BOARD_SIZE_PX[1] * 2 + app_player.BLOCK_SIZE)
 app_player.BOARD_POSFIX = (0, 0)
 
+if mheight < app_player.WINDOW_SIZE[1]:
+    print("WARNING: Screen is too small!")
+    app_player.set_constants((10, 20), 18)
+    app_player.WINDOW_SIZE = (app_player.BOARD_SIZE_PX[0] * 2 + app_player.BLOCK_SIZE,
+                              app_player.BOARD_SIZE_PX[1] * 2 + app_player.BLOCK_SIZE)
+    app_player.BOARD_POSFIX = (0, 0)
+print("Actual window size:", app_player.WINDOW_SIZE)
 
 # Initialize screen
 if fullscreen:
-    info = pygame.display.Info()
-    mwidth, mheight = info.current_w, info.current_h
     # Top-left
     fix = ((mwidth  - app_player.WINDOW_SIZE[0]) // 2,
            (mheight - app_player.WINDOW_SIZE[1]) // 2)

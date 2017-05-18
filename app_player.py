@@ -183,6 +183,7 @@ class App(Game):
         self.board_surface = pygame.Surface(BOARD_SIZE_PX)
         
     def run(self):
+        global AI_CONTROL, AI_CONTROL_VISIBLE
         qclocks = {"left":      qclock.Clock(),
                    "right":     qclock.Clock(),
                    "gravity":   qclock.Clock(),
@@ -232,6 +233,10 @@ class App(Game):
 
                     elif event.key == pygame.K_q:
                         done = True
+
+                    elif event.key == pygame.K_a:
+                        AI_CONTROL = not AI_CONTROL
+                        AI_CONTROL_VISIBLE = not AI_CONTROL_VISIBLE
                     
             #Pause
             if pausing:
@@ -336,7 +341,6 @@ class App(Game):
 
             if qclocks["dbg"].passed(DBGSECS):
                 qclocks["dbg"].tick()
-                print(int(NODELAY), int(FASTMODE), int(SLOWMODE))
             
             pygame.display.flip()
             clock.tick(FPS)
